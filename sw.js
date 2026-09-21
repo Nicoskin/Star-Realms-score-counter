@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение работает без интернета после первого открытия
-const CACHE = 'influence-v5';
+const CACHE = 'influence-v6';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',

@@ -323,7 +323,7 @@ let draft;
 function renderDraft() {
   document.querySelectorAll('#seg-players button').forEach((b) =>
     b.classList.toggle('on', +b.dataset.n === draft.count));
-  $('#start-val').value = draft.start;
+  $('#start-val').textContent = draft.start;
   const box = $('#names');
   box.innerHTML = '';
   for (let i = 0; i < draft.count; i++) {
@@ -394,9 +394,10 @@ document.querySelectorAll('#seg-players button').forEach((b) =>
   b.addEventListener('click', () => { draft.count = +b.dataset.n; renderDraft(); }));
 
 const clampStart = (v) => Math.max(1, Math.min(999, Math.round(v) || 50));
-$('#start-minus').addEventListener('click', () => { draft.start = clampStart(draft.start - 5); renderDraft(); });
-$('#start-plus').addEventListener('click', () => { draft.start = clampStart(draft.start + 5); renderDraft(); });
-$('#start-val').addEventListener('change', (e) => { draft.start = clampStart(+e.target.value); renderDraft(); });
+// Без поля ввода, чтобы не вылезала клавиатура; удержание кнопки меняет значение быстро
+const setStart = (d) => { draft.start = clampStart(draft.start + d); $('#start-val').textContent = draft.start; };
+bindPress($('#start-minus'), () => setStart(-1));
+bindPress($('#start-plus'), () => setStart(+1));
 
 // Вид счёта, переворот и вибрация применяются сразу, без сброса игры
 function renderStyleSeg() {
@@ -441,10 +442,18 @@ function enterFullscreen() {
   if (!canFullscreen || !state.fullscreen || document.fullscreenElement || isFullscreenApp) return;
   document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
 }
-document.addEventListener('pointerup', (e) => {
-  if (e.target.closest('dialog')) return;   // не мешаем настройкам и вводу имени
-  enterFullscreen();
-}, { passive: true });
+// Только по касанию игрового поля: если включать режим по кнопкам панели,
+// он наложится на только что открытое окно настроек и перекроет его.
+$('#board').addEventListener('pointerup', enterFullscreen, { passive: true });
+
+// Полноэкранный элемент ложится поверх открытых окон — переоткрываем их, чтобы они снова были сверху
+document.addEventListener('fullscreenchange', () => {
+  for (const d of document.querySelectorAll('dialog[open]')) {
+    d.returnValue = '';
+    d.close();
+    d.showModal();
+  }
+});
 if (!canFullscreen) $('#row-full').hidden = true;
 
 // ---------- Запуск ----------
