@@ -1,6 +1,9 @@
 'use strict';
 
 const COLORS = ['#6aa8ff', '#ff6a8a', '#5fe0a0', '#ffb84d'];
+// Палитра для выбора цвета игрока в настройках
+const PALETTE = ['#6aa8ff', '#ff6a8a', '#5fe0a0', '#ffb84d', '#b18cff', '#ff4b3e',
+                 '#3fd7e8', '#ffe45c', '#ff8fd8', '#9be15d', '#ff9955', '#d0d6e6'];
 const DEFAULT_NAMES = ['Игрок 1', 'Игрок 2', 'Игрок 3', 'Игрок 4'];
 const STORE_KEY = 'star-realms-authority-v1';
 const MERGE_MS = 2000;      // изменения одного игрока подряд склеиваются в одну запись
@@ -16,7 +19,9 @@ function freshState(prev) {
   const names = prev?.names ?? DEFAULT_NAMES.slice();
   return {
     count, start, names,
+    colors: prev?.colors ?? COLORS.slice(),
     faceToFace: prev?.faceToFace ?? true,
+    fullscreen: prev?.fullscreen ?? true,
     style: prev?.style ?? 'digits',
     vibrate: prev?.vibrate ?? true,
     values: Array.from({ length: count }, () => start),
@@ -36,6 +41,9 @@ function save() {
 }
 
 let state = load();
+state.colors ??= COLORS.slice();       // сохранения из старых версий
+state.fullscreen ??= true;
+const color = (i) => state.colors[i] || COLORS[i];
 
 // ---------- Щит влияния (как на карточке из игры) ----------
 function shieldSVG(id) {
@@ -78,7 +86,7 @@ function buildBoard() {
   for (let i = 0; i < n; i++) {
     const el = document.createElement('section');
     el.className = 'player';
-    el.style.setProperty('--c', COLORS[i]);
+    el.style.setProperty('--c', color(i));
     el.innerHTML = `
       <button class="zone minus" aria-label="минус 1">−</button>
       <button class="zone plus" aria-label="плюс 1">+</button>
@@ -193,11 +201,15 @@ function bindPress(btn, fn) {
     e.preventDefault();
     stop();
     ensureWakeLock();
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {}
     btn.classList.add('pressed');
     fn();
     delay = setTimeout(() => { rep = setInterval(fn, HOLD_EVERY); }, HOLD_DELAY);
   });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => btn.addEventListener(t, stop));
+  ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach((t) => btn.addEventListener(t, stop));
+  // Страховка: отпускание пальца где угодно, уход из приложения — автоповтор всегда прекращается
+  ['pointerup', 'pointercancel', 'blur'].forEach((t) => window.addEventListener(t, stop));
+  document.addEventListener('visibilitychange', stop);
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
   // Клавиатура (Enter/Пробел) — одно нажатие
   btn.addEventListener('keydown', (e) => {
@@ -274,7 +286,7 @@ $('#btn-log').addEventListener('click', () => {
   } else {
     for (const e of state.log.slice().reverse()) {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="dot" style="width:10px;height:10px;border-radius:50%;background:${COLORS[e.p]}"></span>
+      li.innerHTML = `<span class="dot" style="width:10px;height:10px;border-radius:50%;background:${color(e.p)}"></span>
         <span class="who"></span>
         <span class="d ${e.d > 0 ? 'pos' : 'neg'}">${fmt(e.d)}</span>
         <span class="to">${e.to}</span>`;
@@ -315,14 +327,57 @@ function renderDraft() {
   const box = $('#names');
   box.innerHTML = '';
   for (let i = 0; i < draft.count; i++) {
-    const l = document.createElement('label');
-    l.innerHTML = `<span class="dot" style="background:${COLORS[i]}"></span><input maxlength="20" enterkeyhint="done">`;
-    const inp = l.querySelector('input');
+    const row = document.createElement('div');
+    row.className = 'name-row';
+    row.innerHTML = `
+      <button type="button" class="dot-btn" aria-label="Цвет игрока"><span class="dot"></span></button>
+      <input maxlength="20" enterkeyhint="done">
+      <div class="palette" hidden></div>`;
+    const dot = row.querySelector('.dot');
+    const pal = row.querySelector('.palette');
+    dot.style.background = color(i);
+
+    const inp = row.querySelector('input');
     inp.value = draft.names[i];
     inp.placeholder = DEFAULT_NAMES[i];
     inp.addEventListener('input', () => { draft.names[i] = inp.value; });
-    box.appendChild(l);
+
+    row.querySelector('.dot-btn').addEventListener('click', () => {
+      const open = pal.hidden;
+      box.querySelectorAll('.palette').forEach((p) => { p.hidden = true; });
+      pal.hidden = !open;
+    });
+
+    // Цвета из палитры + «другой» (системный выбор цвета)
+    for (const c of PALETTE) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch' + (c === color(i) ? ' on' : '');
+      b.style.background = c;
+      b.setAttribute('aria-label', c);
+      b.addEventListener('click', () => { setColor(i, c); });
+      pal.appendChild(b);
+    }
+    const custom = document.createElement('label');
+    custom.className = 'swatch custom';
+    custom.title = 'Другой цвет';
+    custom.innerHTML = '<input type="color">';
+    const ci = custom.querySelector('input');
+    ci.value = color(i);
+    ci.addEventListener('input', () => setColor(i, ci.value, false));
+    pal.appendChild(custom);
+
+    box.appendChild(row);
   }
+}
+
+// Цвет применяется сразу, счёт не сбрасывается
+function setColor(i, c, rerender = true) {
+  state.colors[i] = c;
+  if (i < state.count) panels[i].el.style.setProperty('--c', c);
+  save();
+  if (rerender) renderDraft();
+  else $('#names').children[i].querySelector('.dot').style.background = c;
 }
 
 $('#btn-settings').addEventListener('click', () => {
@@ -330,6 +385,7 @@ $('#btn-settings').addEventListener('click', () => {
   $('#opt-face').checked = state.faceToFace;
   renderStyleSeg();
   $('#opt-vibe').checked = state.vibrate;
+  $('#opt-full').checked = state.fullscreen;
   renderDraft();
   dlgS.showModal();
 });
@@ -356,6 +412,11 @@ document.querySelectorAll('#seg-style button').forEach((b) =>
 
 $('#opt-face').addEventListener('change', (e) => { state.faceToFace = e.target.checked; buildBoard(); save(); });
 $('#opt-vibe').addEventListener('change', (e) => { state.vibrate = e.target.checked; save(); });
+$('#opt-full').addEventListener('change', (e) => {
+  state.fullscreen = e.target.checked; save();
+  if (state.fullscreen) enterFullscreen();
+  else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+});
 
 // Имена сохраняем и при простом закрытии — без сброса счёта
 dlgS.addEventListener('close', () => {
@@ -369,6 +430,22 @@ $('#settings-apply').addEventListener('click', () => {
   dlgS.close('apply');
   newGame({ count: draft.count, start: draft.start, names });
 });
+
+// ---------- На весь экран ----------
+// Браузер разрешает полноэкранный режим только по касанию, поэтому входим в него
+// при нажатии и снова — после возврата в приложение (система его сбрасывает).
+const canFullscreen = !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+const isFullscreenApp = matchMedia('(display-mode: fullscreen)').matches;
+
+function enterFullscreen() {
+  if (!canFullscreen || !state.fullscreen || document.fullscreenElement || isFullscreenApp) return;
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
+document.addEventListener('pointerup', (e) => {
+  if (e.target.closest('dialog')) return;   // не мешаем настройкам и вводу имени
+  enterFullscreen();
+}, { passive: true });
+if (!canFullscreen) $('#row-full').hidden = true;
 
 // ---------- Запуск ----------
 buildBoard();

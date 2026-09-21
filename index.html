@@ -43,36 +43,41 @@
   <form method="dialog" class="sheet">
     <h2>Настройки</h2>
 
-    <label class="row">
+    <div class="row">
       <span>Игроков</span>
       <div class="seg" id="seg-players">
         <button type="button" data-n="2">2</button>
         <button type="button" data-n="3">3</button>
         <button type="button" data-n="4">4</button>
       </div>
-    </label>
+    </div>
 
-    <label class="row">
+    <div class="row">
       <span>Начальное влияние</span>
       <div class="stepper">
         <button type="button" id="start-minus">−</button>
         <input id="start-val" type="number" inputmode="numeric" min="1" max="999">
         <button type="button" id="start-plus">+</button>
       </div>
-    </label>
+    </div>
 
-    <label class="row">
+    <div class="row">
       <span>Вид счёта</span>
       <div class="seg wide" id="seg-style">
         <button type="button" data-s="digits">Цифры</button>
         <button type="button" data-s="shield">Щит</button>
         <button type="button" data-s="green">Зелёный</button>
       </div>
-    </label>
+    </div>
 
     <label class="row check">
       <span>Лицом к лицу<small>Верхние игроки перевёрнуты — удобно, когда телефон лежит между вами</small></span>
       <input id="opt-face" type="checkbox">
+    </label>
+
+    <label class="row check" id="row-full">
+      <span>На весь экран<small>Скрывает строку состояния и кнопки навигации</small></span>
+      <input id="opt-full" type="checkbox">
     </label>
 
     <label class="row check">
